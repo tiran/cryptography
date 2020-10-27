@@ -3442,6 +3442,11 @@ class TestAuthorityKeyIdentifierExtension(object):
         )
         assert ext.value == aki
 
+        aki = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
+            ski_ext
+        )
+        assert ext.value == aki
+
 
 class TestNameConstraints(object):
     def test_ipaddress_wrong_type(self):

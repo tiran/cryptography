@@ -301,6 +301,9 @@ class TestOpenSSLRandomEngine(object):
         res = backend._lib.ENGINE_free(e)
         assert res == 1
 
+    def test_rhel8_no_osrandom(self):
+        pytest.fail("osrandom engine is not FIPS compliant, see RHBZ#1762667")
+
 
 @pytest.mark.skipif(
     backend._lib.CRYPTOGRAPHY_NEEDS_OSRANDOM_ENGINE,

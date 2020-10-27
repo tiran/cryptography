@@ -39,3 +39,11 @@ class Prehashed(object):
         self._digest_size = algorithm.digest_size
 
     digest_size = utils.read_only_property("_digest_size")
+
+
+def decode_rfc6979_signature(signature):
+    return decode_dss_signature(signature)
+
+
+def encode_rfc6979_signature(r, s):
+    return encode_dss_signature(r, s)

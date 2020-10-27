@@ -685,6 +685,7 @@ class TestRSACertificate(object):
         )
         assert isinstance(cert, x509.Certificate)
         assert cert.serial_number == 11559813051657483483
+        assert cert.serial == cert.serial_number
         fingerprint = binascii.hexlify(cert.fingerprint(hashes.SHA1()))
         assert fingerprint == b"2b619ed04bfc9c3b08eb677d272192286a0947a8"
         assert isinstance(cert.signature_hash_algorithm, hashes.SHA1)

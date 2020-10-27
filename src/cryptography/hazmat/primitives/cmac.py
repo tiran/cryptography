@@ -12,9 +12,10 @@ from cryptography.exceptions import (
 )
 from cryptography.hazmat.backends import _get_backend
 from cryptography.hazmat.backends.interfaces import CMACBackend
-from cryptography.hazmat.primitives import ciphers
+from cryptography.hazmat.primitives import ciphers, mac
 
 
+@utils.register_interface(mac.MACContext)
 class CMAC(object):
     def __init__(self, algorithm, backend=None, ctx=None):
         backend = _get_backend(backend)

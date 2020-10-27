@@ -11,10 +11,11 @@ from cryptography.exceptions import (
     UnsupportedAlgorithm,
     _Reasons,
 )
-from cryptography.hazmat.primitives import constant_time
+from cryptography.hazmat.primitives import constant_time, mac
 from cryptography.hazmat.primitives.ciphers.modes import CBC
 
 
+@utils.register_interface(mac.MACContext)
 class _CMACContext(object):
     def __init__(self, backend, algorithm, ctx=None):
         if not backend.cmac_algorithm_supported(algorithm):

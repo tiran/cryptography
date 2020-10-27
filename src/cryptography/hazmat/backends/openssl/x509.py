@@ -73,6 +73,10 @@ class _Certificate(object):
         self._backend.openssl_assert(asn1_int != self._backend._ffi.NULL)
         return _asn1_integer_to_int(self._backend, asn1_int)
 
+    @property
+    def serial(self):
+        return self.serial_number
+
     def public_key(self):
         pkey = self._backend._lib.X509_get_pubkey(self._x509)
         if pkey == self._backend._ffi.NULL:

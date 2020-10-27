@@ -11,9 +11,10 @@ from cryptography.exceptions import (
     UnsupportedAlgorithm,
     _Reasons,
 )
-from cryptography.hazmat.primitives import constant_time, hashes
+from cryptography.hazmat.primitives import constant_time, hashes, mac
 
 
+@utils.register_interface(mac.MACContext)
 @utils.register_interface(hashes.HashContext)
 class _HMACContext(object):
     def __init__(self, backend, key, algorithm, ctx=None):

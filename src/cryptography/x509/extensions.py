@@ -218,8 +218,12 @@ class AuthorityKeyIdentifier(object):
 
     @classmethod
     def from_issuer_subject_key_identifier(cls, ski):
+        if isinstance(ski, SubjectKeyIdentifier):
+            digest = ski.digest
+        else:
+            digest = ski.value.digest
         return cls(
-            key_identifier=ski.digest,
+            key_identifier=digest,
             authority_cert_issuer=None,
             authority_cert_serial_number=None,
         )
