@@ -675,6 +675,7 @@ class TestDHPublicKeySerialization(object):
         pub_num = key.public_numbers()
         assert loaded_pub_num == pub_num
 
+    @pytest.mark.skip_fips(reason="non-FIPS parameters")
     @pytest.mark.parametrize(
         ("key_path", "loader_func", "encoding", "is_dhx"),
         [
@@ -718,6 +719,7 @@ class TestDHPublicKeySerialization(object):
         )
         assert serialized == key_bytes
 
+    @pytest.mark.skip_fips(reason="non-FIPS parameters")
     @pytest.mark.parametrize(
         ("key_path", "loader_func", "vec_path", "is_dhx"),
         [
