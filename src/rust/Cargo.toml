@@ -6,7 +6,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-pyo3 = { version = "0.13.1" }
+pyo3 = { version = "0.15.1" }
 asn1 = { version = "0.3.6", default-features = false }
 
 [features]
