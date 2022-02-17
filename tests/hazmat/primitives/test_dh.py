@@ -180,7 +180,23 @@ class TestDH(object):
         params = dh.DHParameterNumbers(p, int(vector["g"]))
         param = params.parameters(backend)
         key = param.generate_private_key()
-        assert key.private_numbers().public_numbers.parameter_numbers == params
+        # In OpenSSL 3.0.0 OpenSSL maps to known groups. This results in
+        # a scenario where loading a known group with p and g returns a
+        # re-serialized form that has q as well (the Sophie Germain prime of
+        # that group). This makes a naive comparison of the parameter numbers
+        # objects fail, so we have to be a bit smarter
+        serialized_params = (
+            key.private_numbers().public_numbers.parameter_numbers
+        )
+        if serialized_params.q is None:
+            # This is the path OpenSSL < 3.0 takes
+            assert serialized_params == params
+        else:
+            assert serialized_params.p == params.p
+            assert serialized_params.g == params.g
+            # p = 2q + 1 since it is a Sophie Germain prime, so we can compute
+            # what we expect OpenSSL to have done here.
+            assert serialized_params.q == (params.p - 1) // 2
 
     @pytest.mark.skip_fips(reason="non-FIPS parameters")
     @pytest.mark.parametrize(
@@ -280,6 +296,12 @@ class TestDH(object):
         assert isinstance(key.private_numbers(), dh.DHPrivateNumbers)
         assert isinstance(key.parameters(), dh.DHParameters)
 
+    def test_exchange_wrong_type(self, backend):
+        parameters = FFDH3072_P.parameters(backend)
+        key1 = parameters.generate_private_key()
+        with pytest.raises(TypeError):
+            key1.exchange(b"invalidtype")  # type: ignore[arg-type]
+
     def test_exchange(self, backend):
         parameters = FFDH3072_P.parameters(backend)
         assert isinstance(parameters, dh.DHParameters)
@@ -370,18 +392,19 @@ class TestDH(object):
         key2 = private2.private_key(backend)
         pub_key2 = key2.public_key()
 
-        if pub_key2.public_numbers().y >= parameters1.p:
-            with pytest.raises(ValueError):
-                key1.exchange(pub_key2)
-        else:
-            symkey1 = key1.exchange(pub_key2)
-            assert symkey1
+        with pytest.raises(ValueError):
+            key1.exchange(pub_key2)
 
-            symkey2 = key2.exchange(pub_key1)
-
-            assert symkey1 != symkey2
+        with pytest.raises(ValueError):
+            key2.exchange(pub_key1)
 
     @pytest.mark.skip_fips(reason="key_size too small for FIPS")
+    @pytest.mark.supported(
+        only_if=lambda backend: (
+            not backend._lib.CRYPTOGRAPHY_OPENSSL_300_OR_GREATER
+        ),
+        skip_message="256-bit DH keys are not supported in OpenSSL 3.0.0+",
+    )
     def test_load_256bit_key_from_pkcs8(self, backend):
         data = load_vectors_from_file(
             os.path.join("asymmetric", "DH", "dh_key_256.pem"),
@@ -652,6 +675,7 @@ class TestDHPublicKeySerialization(object):
         pub_num = key.public_numbers()
         assert loaded_pub_num == pub_num
 
+    @pytest.mark.skip_fips(reason="non-FIPS parameters")
     @pytest.mark.parametrize(
         ("key_path", "loader_func", "encoding", "is_dhx"),
         [
@@ -695,6 +719,7 @@ class TestDHPublicKeySerialization(object):
         )
         assert serialized == key_bytes
 
+    @pytest.mark.skip_fips(reason="non-FIPS parameters")
     @pytest.mark.parametrize(
         ("key_path", "loader_func", "vec_path", "is_dhx"),
         [

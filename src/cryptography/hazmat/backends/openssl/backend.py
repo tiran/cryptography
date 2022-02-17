@@ -6,6 +6,7 @@
 import collections
 import contextlib
 import itertools
+import typing
 import warnings
 from contextlib import contextmanager
 
@@ -195,8 +196,9 @@ class Backend(object):
         b"aes-256-gcm",
     }
     _fips_ciphers = (AES, TripleDES)
+    # Sometimes SHA1 is still permissible. That logic is contained
+    # within the various *_supported methods.
     _fips_hashes = (
-        hashes.SHA1,
         hashes.SHA224,
         hashes.SHA256,
         hashes.SHA384,
@@ -209,6 +211,12 @@ class Backend(object):
         hashes.SHA3_512,
         hashes.SHAKE128,
         hashes.SHAKE256,
+    )
+    _fips_ecdh_curves = (
+        ec.SECP224R1,
+        ec.SECP256R1,
+        ec.SECP384R1,
+        ec.SECP521R1,
     )
     _fips_rsa_min_key_size = 2048
     _fips_rsa_min_public_exponent = 65537
@@ -237,16 +245,33 @@ class Backend(object):
         if self._lib.Cryptography_HAS_EVP_PKEY_DHX:
             self._dh_types.append(self._lib.EVP_PKEY_DHX)
 
+    def __repr__(self):
+        return "<OpenSSLBackend(version: {}, FIPS: {})>".format(
+            self.openssl_version_text(), self._fips_enabled
+        )
+
     def openssl_assert(self, ok, errors=None):
         return binding._openssl_assert(self._lib, ok, errors=errors)
 
     def _is_fips_enabled(self):
-        fips_mode = getattr(self._lib, "FIPS_mode", lambda: 0)
-        mode = fips_mode()
+        if self._lib.Cryptography_HAS_300_FIPS:
+            mode = self._lib.EVP_default_properties_is_fips_enabled(
+                self._ffi.NULL
+            )
+        else:
+            mode = getattr(self._lib, "FIPS_mode", lambda: 0)()
+
         if mode == 0:
             # OpenSSL without FIPS pushes an error on the error stack
             self._lib.ERR_clear_error()
         return bool(mode)
+
+    def _enable_fips(self):
+        # This function enables FIPS mode for OpenSSL 3.0.0 on installs that
+        # have the FIPS provider installed properly.
+        self._binding._enable_fips()
+        assert self._is_fips_enabled()
+        self._fips_enabled = self._is_fips_enabled()
 
     def activate_builtin_random(self):
         if self._lib.CRYPTOGRAPHY_NEEDS_OSRANDOM_ENGINE:
@@ -342,15 +367,32 @@ class Backend(object):
         evp_md = self._evp_md_from_algorithm(algorithm)
         return evp_md != self._ffi.NULL
 
+    def scrypt_supported(self):
+        if self._fips_enabled:
+            return False
+        else:
+            return self._lib.Cryptography_HAS_SCRYPT == 1
+
     def hmac_supported(self, algorithm):
+        # FIPS mode still allows SHA1 for HMAC
+        if self._fips_enabled and isinstance(algorithm, hashes.SHA1):
+            return True
+
         return self.hash_supported(algorithm)
 
     def create_hash_ctx(self, algorithm):
         return _HashContext(self, algorithm)
 
     def cipher_supported(self, cipher, mode):
-        if self._fips_enabled and not isinstance(cipher, self._fips_ciphers):
-            return False
+        if self._fips_enabled:
+            # FIPS mode requires AES or TripleDES, but only CBC/ECB allowed
+            # in TripleDES mode.
+            if not isinstance(cipher, self._fips_ciphers) or (
+                isinstance(cipher, TripleDES)
+                and not isinstance(mode, (CBC, ECB))
+            ):
+                return False
+
         try:
             adapter = self._cipher_registry[type(cipher), type(mode)]
         except KeyError:
@@ -766,7 +808,13 @@ class Backend(object):
         if isinstance(padding, PKCS1v15):
             return True
         elif isinstance(padding, PSS) and isinstance(padding._mgf, MGF1):
-            return self.hash_supported(padding._mgf._algorithm)
+            # SHA1 is permissible in MGF1 in FIPS
+            if self._fips_enabled and isinstance(
+                padding._mgf._algorithm, hashes.SHA1
+            ):
+                return True
+            else:
+                return self.hash_supported(padding._mgf._algorithm)
         elif isinstance(padding, OAEP) and isinstance(padding._mgf, MGF1):
             return (
                 self._oaep_hash_supported(padding._mgf._algorithm)
@@ -1280,6 +1328,11 @@ class Backend(object):
     def _evp_pkey_from_der_traditional_key(self, bio_data, password):
         key = self._lib.d2i_PrivateKey_bio(bio_data.bio, self._ffi.NULL)
         if key != self._ffi.NULL:
+            # In OpenSSL 3.0.0-alpha15 there exist scenarios where the key will
+            # successfully load but errors are still put on the stack. Tracked
+            # as https://github.com/openssl/openssl/issues/14996
+            self._consume_errors()
+
             key = self._ffi.gc(key, self._lib.EVP_PKEY_free)
             if password is not None:
                 raise TypeError(
@@ -1447,6 +1500,11 @@ class Backend(object):
             else:
                 self._handle_key_loading_error()
 
+        # In OpenSSL 3.0.0-alpha15 there exist scenarios where the key will
+        # successfully load but errors are still put on the stack. Tracked
+        # as https://github.com/openssl/openssl/issues/14996
+        self._consume_errors()
+
         evp_pkey = self._ffi.gc(evp_pkey, self._lib.EVP_PKEY_free)
 
         if password is not None and userdata.called == 0:
@@ -1469,11 +1527,22 @@ class Backend(object):
                 "incorrect format or it may be encrypted with an unsupported "
                 "algorithm."
             )
-        elif errors[0]._lib_reason_match(
-            self._lib.ERR_LIB_EVP, self._lib.EVP_R_BAD_DECRYPT
-        ) or errors[0]._lib_reason_match(
-            self._lib.ERR_LIB_PKCS12,
-            self._lib.PKCS12_R_PKCS12_CIPHERFINAL_ERROR,
+
+        elif (
+            errors[0]._lib_reason_match(
+                self._lib.ERR_LIB_EVP, self._lib.EVP_R_BAD_DECRYPT
+            )
+            or errors[0]._lib_reason_match(
+                self._lib.ERR_LIB_PKCS12,
+                self._lib.PKCS12_R_PKCS12_CIPHERFINAL_ERROR,
+            )
+            or (
+                self._lib.Cryptography_HAS_PROVIDERS
+                and errors[0]._lib_reason_match(
+                    self._lib.ERR_LIB_PROV,
+                    self._lib.PROV_R_BAD_DECRYPT,
+                )
+            )
         ):
             raise ValueError("Bad decrypt. Incorrect password?")
 
@@ -1487,10 +1556,12 @@ class Backend(object):
             raise ValueError("Unsupported public key algorithm.")
 
         else:
+            errors = binding._errors_with_text(errors)
             raise ValueError(
                 "Could not deserialize key data. The data may be in an "
                 "incorrect format or it may be encrypted with an unsupported "
-                "algorithm."
+                "algorithm.",
+                errors,
             )
 
     def elliptic_curve_supported(self, curve):
@@ -1772,6 +1843,11 @@ class Backend(object):
         return _OCSPResponse(self, ocsp_resp)
 
     def elliptic_curve_exchange_algorithm_supported(self, algorithm, curve):
+        if self._fips_enabled and not isinstance(
+            curve, self._fips_ecdh_curves
+        ):
+            return False
+
         return self.elliptic_curve_supported(curve) and isinstance(
             algorithm, ec.ECDH
         )
@@ -2519,7 +2595,16 @@ class Backend(object):
         if sk_x509_ptr[0] != self._ffi.NULL:
             sk_x509 = self._ffi.gc(sk_x509_ptr[0], self._lib.sk_X509_free)
             num = self._lib.sk_X509_num(sk_x509_ptr[0])
-            for i in range(num):
+
+            # In OpenSSL < 3.0.0 PKCS12 parsing reverses the order of the
+            # certificates.
+            indices: typing.Iterable[int]
+            if self._lib.CRYPTOGRAPHY_OPENSSL_300_OR_GREATER:
+                indices = range(num)
+            else:
+                indices = reversed(range(num))
+
+            for i in indices:
                 x509 = self._lib.sk_X509_value(sk_x509, i)
                 self.openssl_assert(x509 != self._ffi.NULL)
                 x509 = self._ffi.gc(x509, self._lib.X509_free)
@@ -2562,9 +2647,7 @@ class Backend(object):
             sk_x509 = self._lib.sk_X509_new_null()
             sk_x509 = self._ffi.gc(sk_x509, self._lib.sk_X509_free)
 
-            # reverse the list when building the stack so that they're encoded
-            # in the order they were originally provided. it is a mystery
-            for ca in reversed(cas):
+            for ca in cas:
                 res = self._lib.sk_X509_push(sk_x509, ca._x509)
                 backend.openssl_assert(res >= 1)
 

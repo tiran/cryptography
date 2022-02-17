@@ -13,23 +13,22 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         PYTHON:
           - {VERSION: "3.9", TOXENV: "flake,rust,docs", COVERAGE: "false"}
           - {VERSION: "pypy3", TOXENV: "pypy3"}
           - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "openssl", VERSION: "1.1.0l"}}
-          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "openssl", VERSION: "1.1.1i"}}
-          - {VERSION: "3.9", TOXENV: "py39-ssh", OPENSSL: {TYPE: "openssl", VERSION: "1.1.1i"}}
-          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "openssl", VERSION: "1.1.1i", CONFIG_FLAGS: "no-engine no-rc2 no-srtp no-ct"}}
-          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "libressl", VERSION: "2.9.2"}}
-          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "libressl", VERSION: "3.0.2"}}
-          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "libressl", VERSION: "3.1.5"}}
-          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "libressl", VERSION: "3.2.3"}}
-          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "libressl", VERSION: "3.3.1"}}
+          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "openssl", VERSION: "1.1.1m"}}
+          - {VERSION: "3.9", TOXENV: "py39-ssh", OPENSSL: {TYPE: "openssl", VERSION: "1.1.1m"}}
+          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "openssl", VERSION: "1.1.1m", CONFIG_FLAGS: "no-engine no-rc2 no-srtp no-ct"}}
+          - {VERSION: "3.9", TOXENV: "py39", OPENSSL: {TYPE: "openssl", VERSION: "3.0.1"}}
+          - {VERSION: "3.9", TOXENV: "py39", TOXARGS: "--enable-fips=1", OPENSSL: {TYPE: "openssl", CONFIG_FLAGS: "enable-fips", VERSION: "3.0.1"}}
+          - {VERSION: "3.10", TOXENV: "py310"}
         RUST:
           - stable
-    name: "${{ matrix.PYTHON.TOXENV }} ${{ matrix.PYTHON.OPENSSL.TYPE }} ${{ matrix.PYTHON.OPENSSL.VERSION }} ${{ matrix.PYTHON.OPENSSL.CONFIG_FLAGS }}"
-    timeout-minutes: 30
+    name: "${{ matrix.PYTHON.TOXENV }} ${{ matrix.PYTHON.OPENSSL.TYPE }} ${{ matrix.PYTHON.OPENSSL.VERSION }} ${{ matrix.PYTHON.TOXARGS }} ${{ matrix.PYTHON.OPENSSL.CONFIG_FLAGS }}"
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2
@@ -71,7 +70,7 @@ jobs:
           path: ${{ github.workspace }}/osslcache
           # When altering the openssl build process you may need to increment the value on the end of this cache key
           # so that you can prevent it from fetching the cache and skipping the build step.
-          key: ${{ matrix.PYTHON.OPENSSL.TYPE }}-${{ matrix.PYTHON.OPENSSL.VERSION }}-${{ env.CONFIG_HASH }}-1
+          key: ${{ matrix.PYTHON.OPENSSL.TYPE }}-${{ matrix.PYTHON.OPENSSL.VERSION }}-${{ env.CONFIG_HASH }}-2
         if: matrix.PYTHON.OPENSSL
       - name: Build custom OpenSSL/LibreSSL
         run: .github/workflows/build_openssl.sh
@@ -81,12 +80,12 @@ jobs:
         if: matrix.PYTHON.OPENSSL && steps.ossl-cache.outputs.cache-hit != 'true'
       - name: Set CFLAGS/LDFLAGS
         run: |
-          echo "CFLAGS=${CFLAGS} -I${OSSL_PATH}/include" >> $GITHUB_ENV
-          echo "LDFLAGS=${LDFLAGS} -L${OSSL_PATH}/lib -Wl,-rpath=${OSSL_PATH}/lib" >> $GITHUB_ENV
+          echo "CFLAGS=${CFLAGS} -Werror=implicit-function-declaration -I${OSSL_PATH}/include" >> $GITHUB_ENV
+          echo "LDFLAGS=${LDFLAGS} -L${OSSL_PATH}/lib -L${OSSL_PATH}/lib64 -Wl,-rpath=${OSSL_PATH}/lib -Wl,-rpath=${OSSL_PATH}/lib64" >> $GITHUB_ENV
         if: matrix.PYTHON.OPENSSL
       - name: Tests
         run: |
-            tox -r --  --color=yes --wycheproof-root=wycheproof
+            tox -r --  --color=yes --wycheproof-root=wycheproof ${{ matrix.PYTHON.TOXARGS }}
         env:
           TOXENV: ${{ matrix.PYTHON.TOXENV }}
       - uses: ./.github/actions/upload-coverage
@@ -98,6 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     container: ghcr.io/pyca/cryptography-runner-${{ matrix.IMAGE.IMAGE }}
     strategy:
+      fail-fast: false
       matrix:
         IMAGE:
           - {IMAGE: "centos8", TOXENV: "py36"}
@@ -107,10 +107,10 @@ jobs:
           - {IMAGE: "sid", TOXENV: "py39"}
           - {IMAGE: "ubuntu-bionic", TOXENV: "py36"}
           - {IMAGE: "ubuntu-focal", TOXENV: "py38"}
-          - {IMAGE: "ubuntu-rolling", TOXENV: "py38"}
-          - {IMAGE: "ubuntu-rolling", TOXENV: "py38-randomorder"}
+          - {IMAGE: "ubuntu-rolling", TOXENV: "py39"}
+          - {IMAGE: "ubuntu-rolling", TOXENV: "py39-randomorder"}
           - {IMAGE: "fedora", TOXENV: "py39"}
-          - {IMAGE: "alpine", TOXENV: "py38"}
+          - {IMAGE: "alpine", TOXENV: "py39"}
     name: "${{ matrix.IMAGE.TOXENV }} on ${{ matrix.IMAGE.IMAGE }}"
     timeout-minutes: 30
     steps:
@@ -139,6 +139,7 @@ jobs:
   linux-rust:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         PYTHON:
           - {VERSION: "3.9", TOXENV: "py39"}
@@ -184,6 +185,7 @@ jobs:
   macos:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         PYTHON:
           - {VERSION: "3.6", TOXENV: "py36", EXTRA_CFLAGS: ""}
@@ -239,6 +241,7 @@ jobs:
   windows:
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         WINDOWS:
           - {ARCH: 'x86', WINDOWS: 'win32', RUST_TRIPLE: 'i686-pc-windows-msvc'}
@@ -297,11 +300,11 @@ jobs:
   linux-downstream:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         DOWNSTREAM:
           - paramiko
           - pyopenssl
-          - twisted
           - aws-encryption-sdk
           - dynamodb-encryption-sdk
           - certbot
