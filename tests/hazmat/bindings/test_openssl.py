@@ -84,6 +84,7 @@ class TestOpenSSL(object):
             with pytest.raises(AttributeError):
                 b.lib.TLS_ST_OK
 
+    @pytest.mark.skip_fips(reason="FIPS maps to different error codes")
     def test_openssl_assert_error_on_stack(self):
         b = Binding()
         b.lib.ERR_put_error(
