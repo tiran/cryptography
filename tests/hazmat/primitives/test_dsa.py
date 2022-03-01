@@ -59,6 +59,10 @@ def test_skip_if_dsa_not_supported(backend):
         _skip_if_dsa_not_supported(backend, DummyHashAlgorithm(), 1, 1, 1)
 
 
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
 class TestDSA(object):
     def test_generate_dsa_parameters(self, backend):
         parameters = dsa.generate_parameters(2048, backend)
@@ -76,11 +80,6 @@ class TestDSA(object):
         ),
     )
     def test_generate_dsa_keys(self, vector, backend):
-        if (
-            backend._fips_enabled
-            and vector["p"] < backend._fips_dsa_min_modulus
-        ):
-            pytest.skip("Small modulus blocked in FIPS mode")
         parameters = dsa.DSAParameterNumbers(
             p=vector["p"], q=vector["q"], g=vector["g"]
         ).parameters(backend)
@@ -389,6 +388,10 @@ class TestDSA(object):
         ).private_key(backend)
 
 
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
 class TestDSAVerification(object):
     def test_dsa_verification(self, backend, subtests):
         vectors = load_vectors_from_file(
@@ -491,6 +494,10 @@ class TestDSAVerification(object):
             )
 
 
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
 class TestDSASignature(object):
     def test_dsa_signing(self, backend, subtests):
         vectors = load_vectors_from_file(
@@ -695,6 +702,10 @@ class TestDSANumberEquality(object):
         assert priv != object()
 
 
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
 class TestDSASerialization(object):
     @pytest.mark.parametrize(
         ("fmt", "password"),
@@ -916,6 +927,10 @@ class TestDSASerialization(object):
             )
 
 
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
 class TestDSAPEMPublicKeySerialization(object):
     @pytest.mark.parametrize(
         ("key_path", "loader_func", "encoding"),

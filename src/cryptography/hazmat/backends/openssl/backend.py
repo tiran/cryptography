@@ -804,11 +804,16 @@ class Backend(BackendInterface):
         self.openssl_assert(res == 1)
         return evp_pkey
 
+    def dsa_supported(self) -> bool:
+        return not self._fips_enabled
+
     def dsa_hash_supported(self, algorithm):
+        if not self.dsa_supported():
+            return False
         return self.hash_supported(algorithm)
 
     def dsa_parameters_supported(self, p, q, g):
-        return True
+        return self.dsa_supported()
 
     def cmac_algorithm_supported(self, algorithm):
         return self.cipher_supported(
