@@ -59,7 +59,12 @@ def test_skip_if_dsa_not_supported(backend):
         _skip_if_dsa_not_supported(backend, DummyHashAlgorithm(), 1, 1, 1)
 
 
-class TestDSA(object):
+
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
+class TestDSA:
     def test_generate_dsa_parameters(self, backend):
         parameters = dsa.generate_parameters(2048, backend)
         assert isinstance(parameters, dsa.DSAParameters)
@@ -76,11 +81,6 @@ class TestDSA(object):
         ),
     )
     def test_generate_dsa_keys(self, vector, backend):
-        if (
-            backend._fips_enabled
-            and vector["p"] < backend._fips_dsa_min_modulus
-        ):
-            pytest.skip("Small modulus blocked in FIPS mode")
         parameters = dsa.DSAParameterNumbers(
             p=vector["p"], q=vector["q"], g=vector["g"]
         ).parameters(backend)
@@ -389,7 +389,12 @@ class TestDSA(object):
         ).private_key(backend)
 
 
-class TestDSAVerification(object):
+
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
+class TestDSAVerification:
     def test_dsa_verification(self, backend, subtests):
         vectors = load_vectors_from_file(
             os.path.join("asymmetric", "DSA", "FIPS_186-3", "SigVer.rsp"),
@@ -481,17 +486,12 @@ class TestDSAVerification(object):
                 Prehashed(hashes.SHA1())  # type: ignore[arg-type]
             )
 
-    def test_prehashed_unsupported_in_verifier_ctx(self, backend):
-        public_key = DSA_KEY_1024.private_key(backend).public_key()
-        with pytest.raises(TypeError), pytest.warns(
-            CryptographyDeprecationWarning
-        ):
-            public_key.verifier(
-                b"0" * 64, Prehashed(hashes.SHA1())  # type: ignore[arg-type]
-            )
 
-
-class TestDSASignature(object):
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
+class TestDSASignature:
     def test_dsa_signing(self, backend, subtests):
         vectors = load_vectors_from_file(
             os.path.join("asymmetric", "DSA", "FIPS_186-3", "SigGen.txt"),
@@ -695,7 +695,11 @@ class TestDSANumberEquality(object):
         assert priv != object()
 
 
-class TestDSASerialization(object):
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
+class TestDSASerialization:
     @pytest.mark.parametrize(
         ("fmt", "password"),
         itertools.product(
@@ -916,7 +920,11 @@ class TestDSASerialization(object):
             )
 
 
-class TestDSAPEMPublicKeySerialization(object):
+@pytest.mark.supported(
+    only_if=lambda backend: backend.dsa_supported(),
+    skip_message="Does not support DSA.",
+)
+class TestDSAPEMPublicKeySerialization:
     @pytest.mark.parametrize(
         ("key_path", "loader_func", "encoding"),
         [
