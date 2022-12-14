@@ -18,6 +18,8 @@ static const int RSA_F4;
 
 static const int Cryptography_HAS_RSA_OAEP_MD;
 static const int Cryptography_HAS_RSA_OAEP_LABEL;
+
+static const int Cryptography_HAS_IMPLICIT_RSA_REJECTION;
 """
 
 FUNCTIONS = """
@@ -56,5 +58,11 @@ static const long Cryptography_HAS_RSA_OAEP_LABEL = 0;
 int (*EVP_PKEY_CTX_set_rsa_oaep_md)(EVP_PKEY_CTX *, EVP_MD *) = NULL;
 int (*EVP_PKEY_CTX_set0_rsa_oaep_label)(EVP_PKEY_CTX *, unsigned char *,
                                         int) = NULL;
+#endif
+
+#if defined(EVP_PKEY_CTRL_RSA_IMPLICIT_REJECTION)
+static const int Cryptography_HAS_IMPLICIT_RSA_REJECTION = 1;
+#else
+static const int Cryptography_HAS_IMPLICIT_RSA_REJECTION = 0;
 #endif
 """
