@@ -155,7 +155,7 @@ class _CipherContext(object):
         data_processed = 0
         total_out = 0
         outlen = self._backend._ffi.new("int *")
-        baseoutbuf = self._backend._ffi.from_buffer(buf)
+        baseoutbuf = self._backend._ffi.from_buffer(buf, require_writable=True)
         baseinbuf = self._backend._ffi.from_buffer(data)
 
         while data_processed != total_data_len:
