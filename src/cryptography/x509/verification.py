@@ -20,5 +20,12 @@ __all__ = [
 Store = rust_x509.Store
 Subject = typing.Union[DNSName, IPAddress]
 ServerVerifier = rust_x509.ServerVerifier
-PolicyBuilder = rust_x509.PolicyBuilder
+# PolicyBuilder = rust_x509.PolicyBuilder
 VerificationError = rust_x509.VerificationError
+
+
+def PolicyBuilder() -> rust_x509.PolicyBuilder:  # noqa: N802
+    raise RuntimeError(
+        "Downstream does not support unstable X.509 path verification in "
+        "c10s / RHEL 10, see https://issues.redhat.com/browse/RHEL-23012"
+    )

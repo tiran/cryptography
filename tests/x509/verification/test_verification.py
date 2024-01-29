@@ -24,6 +24,7 @@ def dummy_store() -> Store:
     return Store([cert])
 
 
+@pytest.mark.skip("Disabled in c10s / RHEL 10, see RHEL-23012")
 class TestPolicyBuilder:
     def test_time_already_set(self):
         with pytest.raises(ValueError):
@@ -95,6 +96,7 @@ class TestPolicyBuilder:
             PolicyBuilder().build_server_verifier(DNSName("cryptography.io"))
 
 
+@pytest.mark.skip("Disabled in c10s / RHEL 10, see RHEL-23012")
 class TestStore:
     def test_store_rejects_empty_list(self):
         with pytest.raises(ValueError):
@@ -105,6 +107,7 @@ class TestStore:
             Store(["not a cert"])  # type: ignore[list-item]
 
 
+@pytest.mark.skip("Disabled in c10s / RHEL 10, see RHEL-23012")
 class TestServerVerifier:
     @pytest.mark.parametrize(
         ("validation_time", "valid"),
@@ -138,3 +141,7 @@ class TestServerVerifier:
                 match="cert is not valid at validation time",
             ):
                 verifier.verify(leaf, [])
+
+def test_disabled_policybuilder():
+    with pytest.raises(RuntimeError):
+        PolicyBuilder()
